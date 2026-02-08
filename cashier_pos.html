@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>نقطة بيع الكاشير - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen text-right">
+    <div id="app" class="app-shell px-5 md:px-10 py-8">
+      <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="badge">منصة الكاشير</p>
+          <h1 class="text-4xl md:text-5xl tracking-wide text-white">مبيعات اليوم</h1>
+          <p class="text-soft text-sm">
+            مرحبا، {{ profile?.username }}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <template v-if="profile?.role === 'admin'">
+            <a href="admin_dashboard.html" class="pill-link btn-outline text-sm">لوحة التحكم</a>
+            <a href="admin_items.html" class="pill-link btn-outline text-sm">الاصناف</a>
+            <a href="admin_reports.html" class="pill-link btn-outline text-sm">التقارير</a>
+          </template>
+          <button
+            class="pill-link btn-outline text-sm"
+            @click="handleSignOut"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section class="mt-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+        <div class="panel rounded-3xl p-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">الكتالوج</h2>
+            <span class="mono text-xs text-faint">اضغط للاضافة</span>
+          </div>
+          <div class="mt-6 grid gap-6 md:grid-cols-2">
+            <div>
+              <p class="badge">الخدمات</p>
+              <div class="mt-3 space-y-2">
+                <button
+                  v-for="service in services"
+                  :key="service.id"
+                  class="flex w-full items-center justify-between rounded-2xl card-strong px-4 py-3 text-sm"
+                  @click="addLine('service', service)"
+                >
+                  <span>{{ service.name }}</span>
+                  <span class="mono">{{ formatMoney(service.price) }}</span>
+                </button>
+              </div>
+            </div>
+            <div>
+              <p class="badge">المنتجات</p>
+              <div class="mt-3 space-y-2">
+                <button
+                  v-for="item in items"
+                  :key="item.id"
+                  class="flex w-full items-center justify-between rounded-2xl card-strong px-4 py-3 text-sm"
+                  :class="{ 'opacity-60 cursor-not-allowed': item.stock_qty <= 0 }"
+                  :disabled="item.stock_qty <= 0"
+                  @click="addLine('item', item)"
+                >
+                  <div>
+                    <p class="text-sm text-white">{{ item.name }}</p>
+                    <p class="text-xs text-faint">المخزون: {{ item.stock_qty }}</p>
+                  </div>
+                  <span class="mono">{{ formatMoney(item.price) }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel rounded-3xl p-6">
+          <h2 class="text-2xl md:text-3xl tracking-wide text-white">فاتورة جديدة</h2>
+          <p class="text-soft text-sm">تفاصيل الاصناف والمجموع.</p>
+          <div class="mt-4 space-y-3">
+            <div
+              v-for="(line, index) in billLines"
+              :key="`${line.type}-${line.ref_id}`"
+              class="flex flex-wrap items-center justify-between gap-3 rounded-2xl card-strong px-3 py-2"
+            >
+              <div>
+                <p class="text-sm text-white">{{ line.name }}</p>
+                <p class="mono text-xs text-faint">{{ line.type }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  class="input-field w-16 rounded-lg px-2 py-1 text-sm"
+                  v-model.number="line.qty"
+                  @change="updateQty(line)"
+                />
+                <span class="mono text-sm">{{ formatMoney(line.total) }}</span>
+                <button
+                  class="text-xs text-red-400"
+                  @click="removeLine(index)"
+                >
+                  حذف
+                </button>
+              </div>
+            </div>
+            <p v-if="!billLines.length" class="text-sm text-faint">
+              اضف منتجات او خدمات لبدء فاتورة.
+            </p>
+          </div>
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
+            <div class="space-y-2">
+              <p class="badge">الاجمالي</p>
+              <div class="flex items-center gap-3 text-sm text-faint">
+                <span>قبل الخصم:</span>
+                <span class="mono">{{ formatMoney(billSubtotal) }}</span>
+              </div>
+              <div class="flex items-center gap-3 text-sm text-faint">
+                <span>الخصم:</span>
+                <span class="mono">{{ formatMoney(discountValue) }}</span>
+              </div>
+              <p class="text-2xl md:text-3xl mono text-white">{{ formatMoney(billTotal) }}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <input
+                v-model.number="discount"
+                type="number"
+                min="0"
+                class="input-field w-40 rounded-xl px-3 py-2 text-sm"
+                placeholder="خصم بالجنيه"
+              />
+              <button
+                class="rounded-2xl btn-primary px-6 py-3"
+                :disabled="saving"
+                @click="completeBill"
+              >
+                {{ saving ? "جاري الحفظ..." : "اتمام الفاتورة" }}
+              </button>
+            </div>
+          </div>
+          <p v-if="error" class="mt-3 text-sm text-red-400">{{ error }}</p>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">اليوم</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">فواتير اليوم</h2>
+          </div>
+          <div>
+            <p class="mono text-xs text-faint">ربح اليوم</p>
+            <p class="text-2xl md:text-3xl mono text-white">{{ formatMoney(todayTotal) }}</p>
+          </div>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[520px] text-right text-sm table-dark">
+            <thead>
+              <tr>
+                <th class="py-2">الوقت</th>
+                <th>الكاشير</th>
+                <th>الاجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="bill in todayBills" :key="bill.id" class="border-t">
+                <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
+                <td>{{ bill.profiles?.username || "-" }}</td>
+                <td class="mono">{{ formatMoney(bill.total) }}</td>
+              </tr>
+              <tr v-if="!todayBills.length">
+                <td colspan="3" class="py-4 text-center text-faint">
+                  لا توجد فواتير اليوم.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="assets/js/cashier.js"></script>
+  </body>
+</html>

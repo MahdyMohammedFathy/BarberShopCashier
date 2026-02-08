@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ارباح الكاشير - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen text-right">
+    <div id="app" class="app-shell px-5 md:px-10 py-8">
+      <header class="flex flex-wrap items-center justify-between gap-4 no-print">
+        <div>
+          <p class="badge">ارباح الكاشير</p>
+          <h1 class="text-4xl md:text-5xl tracking-wide text-white">تفاصيل الارباح</h1>
+          <p class="text-soft text-sm">الاسبوع: {{ weekLabel }}</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a
+            href="admin_dashboard.html"
+            class="pill-link btn-outline text-sm"
+            >لوحة التحكم</a
+          >
+          <a
+            href="admin_items.html"
+            class="pill-link btn-outline text-sm"
+            >الاصناف</a
+          >
+          <a
+            href="admin_reports.html"
+            class="pill-link btn-outline text-sm"
+            >التقارير</a
+          >
+          <a
+            href="cashier_pos.html"
+            class="pill-link btn-primary text-sm"
+            >فاتورة جديدة</a
+          >
+          <button
+            class="pill-link btn-outline text-sm"
+            @click="openPrintView"
+          >
+            طباعة التقرير
+          </button>
+          <button
+            class="pill-link btn-outline text-sm"
+            @click="handleSignOut"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section v-if="soldOutItems.length && bannerVisible" class="mt-6 panel rounded-3xl p-4 alert-banner no-print">
+        <p class="alert-title">تنبيه: منتجات نافدة</p>
+        <p class="text-sm text-faint">المنتجات التالية نفدت من المخزون:</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <span
+            v-for="item in soldOutItems"
+            :key="item.id"
+            class="pill-link btn-outline text-xs"
+          >
+            {{ item.name }}
+          </span>
+        </div>
+      </section>
+
+      <div id="print-area">
+        <section class="mt-8 panel rounded-3xl p-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">الاجمالي والصافي</h2>
+            <span class="mono text-xs text-faint">الصافي بعد خصم تكلفة الاصناف</span>
+          </div>
+          <div class="mt-4 overflow-x-auto">
+            <table class="w-full min-w-[860px] text-right text-sm table-dark">
+              <thead>
+                <tr>
+                  <th class="py-2">الكاشير</th>
+                  <th>اجمالي اليوم</th>
+                  <th>صافي اليوم</th>
+                  <th>اجمالي الاسبوع</th>
+                  <th>صافي الاسبوع</th>
+                  <th>اجمالي الشهر</th>
+                  <th>صافي الشهر</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in stats" :key="row.id" class="border-t">
+                  <td class="py-2">{{ row.name }}</td>
+                  <td class="mono">{{ formatMoney(row.todayGross) }}</td>
+                  <td class="mono">{{ formatMoney(row.todayNet) }}</td>
+                  <td class="mono">{{ formatMoney(row.weekGross) }}</td>
+                  <td class="mono">{{ formatMoney(row.weekNet) }}</td>
+                  <td class="mono">{{ formatMoney(row.monthGross) }}</td>
+                  <td class="mono">{{ formatMoney(row.monthNet) }}</td>
+                </tr>
+                <tr v-if="!stats.length">
+                  <td colspan="7" class="py-4 text-center text-faint">
+                    لا يوجد كاشير مسجل.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script type="module" src="assets/js/adminCashierProfits.js"></script>
+  </body>
+</html>

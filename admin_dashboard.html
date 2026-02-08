@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>لوحة التحكم - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen text-right">
+    <div id="app" class="app-shell px-5 md:px-10 py-8">
+      <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="badge">لوحة المدير</p>
+          <h1 class="text-4xl md:text-5xl tracking-wide text-white">ملخص الارباح</h1>
+          <p class="text-soft text-sm">
+            مرحبا، {{ profile?.username }}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a
+            href="admin_items.html"
+            class="pill-link btn-outline text-sm"
+            >ادارة الاصناف</a
+          >
+          <a
+            href="admin_reports.html"
+            class="pill-link btn-outline text-sm"
+            >التقارير</a
+          >
+          <a
+            href="admin_cashier_profits.html"
+            class="pill-link btn-outline text-sm"
+            >ارباح الكاشير</a
+          >
+          <a
+            href="cashier_pos.html"
+            class="pill-link btn-primary text-sm"
+            >فاتورة جديدة</a
+          >
+          <button
+            class="pill-link btn-outline text-sm"
+            @click="handleSignOut"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section v-if="soldOutItems.length && bannerVisible" class="mt-6 panel rounded-3xl p-4 alert-banner">
+        <p class="alert-title">تنبيه: منتجات نافدة</p>
+        <p class="text-sm text-faint">المنتجات التالية نفدت من المخزون:</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <span
+            v-for="item in soldOutItems"
+            :key="item.id"
+            class="pill-link btn-outline text-xs"
+          >
+            {{ item.name }}
+          </span>
+        </div>
+      </section>
+
+      <section class="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div class="panel rounded-3xl p-6">
+          <p class="badge">اليوم</p>
+          <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(todayTotal) }}</p>
+          <p class="mt-2 text-sm text-faint">ربح اليوم</p>
+        </div>
+        <div class="panel rounded-3xl p-6">
+          <p class="badge">هذا الاسبوع</p>
+          <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(weekTotal) }}</p>
+          <p class="mt-2 text-sm text-faint">ربح الاسبوع</p>
+        </div>
+        <div class="panel rounded-3xl p-6">
+          <p class="badge">هذا الشهر</p>
+          <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(monthTotal) }}</p>
+          <p class="mt-2 text-sm text-faint">ربح الشهر</p>
+        </div>
+        <div class="panel rounded-3xl p-6">
+          <p class="badge">هذه السنة</p>
+          <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(yearTotal) }}</p>
+          <p class="mt-2 text-sm text-faint">ربح السنة</p>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-2xl md:text-3xl tracking-wide text-white">احدث الفواتير</h2>
+          <span class="mono text-xs text-faint">تحديث مباشر</span>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[620px] text-right text-sm table-dark">
+            <thead>
+              <tr>
+                <th class="py-2">الوقت</th>
+                <th>الكاشير</th>
+                <th>الاجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="bill in bills.slice(0, 10)" :key="bill.id" class="border-t">
+                <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
+                <td>{{ bill.profiles?.username || "-" }}</td>
+                <td class="mono">{{ formatMoney(bill.total) }}</td>
+              </tr>
+              <tr v-if="!bills.length">
+                <td colspan="3" class="py-4 text-center text-faint">
+                  لا توجد فواتير بعد.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="assets/js/adminDashboard.js"></script>
+  </body>
+</html>

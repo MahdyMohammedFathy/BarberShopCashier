@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>التقارير - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen text-right">
+    <div id="app" class="app-shell px-5 md:px-10 py-8">
+      <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="badge">تقارير المدير</p>
+          <h1 class="text-4xl md:text-5xl tracking-wide text-white">الفواتير والمستخدمون</h1>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a
+            href="admin_dashboard.html"
+            class="pill-link btn-outline text-sm"
+            >لوحة التحكم</a
+          >
+          <a
+            href="admin_items.html"
+            class="pill-link btn-outline text-sm"
+            >الاصناف</a
+          >
+          <a
+            href="admin_cashier_profits.html"
+            class="pill-link btn-outline text-sm"
+            >ارباح الكاشير</a
+          >
+          <a
+            href="cashier_pos.html"
+            class="pill-link btn-primary text-sm"
+            >فاتورة جديدة</a
+          >
+          <button
+            class="pill-link btn-outline text-sm"
+            @click="handleSignOut"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section v-if="soldOutItems.length && bannerVisible" class="mt-6 panel rounded-3xl p-4 alert-banner">
+        <p class="alert-title">تنبيه: منتجات نافدة</p>
+        <p class="text-sm text-faint">المنتجات التالية نفدت من المخزون:</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <span
+            v-for="item in soldOutItems"
+            :key="item.id"
+            class="pill-link btn-outline text-xs"
+          >
+            {{ item.name }}
+          </span>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">الفواتير</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">التقارير</h2>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 font-sans text-sm">
+            <label class="flex items-center gap-2">
+              من
+              <input
+                type="date"
+                v-model="dateFrom"
+                class="input-field rounded-xl px-3 py-2"
+              />
+            </label>
+            <label class="flex items-center gap-2">
+              الى
+              <input
+                type="date"
+                v-model="dateTo"
+                class="input-field rounded-xl px-3 py-2"
+              />
+            </label>
+            <button
+              class="rounded-xl btn-outline px-4 py-2"
+              @click="loadBills"
+            >
+              تطبيق
+            </button>
+            <button
+              class="rounded-xl btn-outline px-4 py-2"
+              @click="resetRange"
+            >
+              اعادة
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full min-w-[620px] text-right text-sm table-dark">
+            <thead>
+              <tr>
+                <th class="py-2">الوقت</th>
+                <th>الكاشير</th>
+                <th>الاجمالي</th>
+                <th>التفاصيل</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="bill in bills" :key="bill.id">
+                <tr class="border-t">
+                  <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
+                  <td>{{ bill.profiles?.username || "-" }}</td>
+                  <td class="mono">{{ formatMoney(bill.total) }}</td>
+                  <td>
+                    <button
+                      class="text-xs text-sky-300"
+                      @click="toggleLines(bill.id)"
+                    >
+                      {{ lineItems[bill.id] ? "اخفاء" : "عرض" }}
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="lineItems[bill.id]" class="border-t">
+                  <td colspan="4" class="py-3">
+                    <div v-if="loadingLines[bill.id]" class="text-sm text-faint">
+                      جاري التحميل...
+                    </div>
+                    <div v-else class="grid gap-2 md:grid-cols-2">
+                      <div
+                        v-for="line in lineItems[bill.id]"
+                        :key="line.id"
+                        class="flex items-center justify-between rounded-xl card-strong px-3 py-2"
+                      >
+                        <div>
+                          <p class="text-sm text-white">{{ line.name }}</p>
+                          <p class="mono text-xs text-faint">
+                            {{ line.line_type }} - الكمية {{ line.qty }}
+                          </p>
+                        </div>
+                        <span class="mono text-sm">{{ formatMoney(line.total) }}</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="!bills.length">
+                <td colspan="4" class="py-4 text-center text-faint">
+                  لا توجد فواتير.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 flex items-center justify-between">
+          <p class="badge">الاجمالي</p>
+          <p class="mono text-2xl md:text-3xl text-white">{{ formatMoney(total) }}</p>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div>
+          <p class="badge">مستخدمو النظام</p>
+          <h2 class="text-2xl md:text-3xl tracking-wide text-white">المستخدمون</h2>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[620px] text-right text-sm table-dark">
+            <thead>
+              <tr>
+                <th class="py-2">اسم المستخدم</th>
+                <th>الصلاحية</th>
+                <th>الاسم الكامل</th>
+                <th>تاريخ الانشاء</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in users" :key="user.id" class="border-t">
+                <td class="py-2">{{ user.username }}</td>
+                <td>{{ user.role }}</td>
+                <td>{{ user.full_name || "-" }}</td>
+                <td>{{ formatDateTime(user.created_at) }}</td>
+              </tr>
+              <tr v-if="!users.length">
+                <td colspan="4" class="py-4 text-center text-faint">
+                  لا توجد بيانات مستخدمين.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="assets/js/adminReports.js"></script>
+  </body>
+</html>
