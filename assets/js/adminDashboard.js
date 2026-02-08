@@ -203,7 +203,7 @@ const app = {
     },
     async handleSignOut() {
       await signOut();
-      window.location.href = "login.html";
+      window.location.href = "index.html";
     },
     subscribeRealtime() {
       supabase

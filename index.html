@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>تسجيل الدخول - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen flex items-center justify-center text-right auth-page">
+    <main class="w-full max-w-2xl px-6">
+      <header class="mb-8">
+        <h1 class="text-4xl md:text-5xl auth-title">كاشير الحلاقة</h1>
+        <p class="mt-2 auth-subtitle">واجهة عربية لادارة الفواتير والخدمات</p>
+      </header>
+
+      <section class="panel auth-card p-10 fade-up">
+        <h2 class="text-3xl auth-title">تسجيل الدخول</h2>
+        <form id="loginForm" class="mt-8 space-y-5">
+          <div>
+            <label class="auth-label text-sm" for="username">اسم المستخدم</label>
+            <input
+              id="username"
+              type="text"
+              class="auth-input mt-2 w-full rounded-2xl px-4 py-3"
+              placeholder="ادخل اسم المستخدم"
+              required
+            />
+          </div>
+          <div>
+            <label class="auth-label text-sm" for="password">كلمة المرور</label>
+            <input
+              id="password"
+              type="password"
+              class="auth-input mt-2 w-full rounded-2xl px-4 py-3"
+              placeholder="ادخل كلمة المرور"
+              required
+            />
+          </div>
+          <div class="flex items-center justify-between">
+            <p id="error" class="text-sm text-red-400"></p>
+            <button
+              class="auth-button rounded-2xl px-6 py-3 text-white"
+              type="submit"
+            >
+              دخول
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script type="module">
+      import { signInWithUsername } from "./assets/js/auth.js";
+      import { supabase } from "./assets/js/supabaseClient.js";
+
+      const form = document.getElementById("loginForm");
+      const errorEl = document.getElementById("error");
+
+      async function redirectIfSession() {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) return;
+        const { user } = data.session;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profile?.role === "admin") {
+          window.location.href = "admin_dashboard.html";
+          return;
+        }
+        if (profile?.role === "cashier") {
+          window.location.href = "cashier_pos.html";
+        }
+      }
+
+      redirectIfSession();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorEl.textContent = "";
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
+        try {
+          const { profile } = await signInWithUsername(username, password);
+          if (profile.role === "admin") {
+            window.location.href = "admin_dashboard.html";
+            return;
+          }
+          if (profile.role === "cashier") {
+            window.location.href = "cashier_pos.html";
+            return;
+          }
+          errorEl.textContent = "صلاحية غير معروفة.";
+        } catch (error) {
+          errorEl.textContent = error.message;
+        }
+      });
+    </script>
+  </body>
+</html>
