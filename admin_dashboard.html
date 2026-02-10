@@ -22,8 +22,14 @@
           <p class="text-soft text-sm">
             مرحبا، {{ profile?.username }}
           </p>
+          <p class="text-faint text-xs mt-1">الارقام بعد خصم مصروف الجيب.</p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="admin-nav flex flex-wrap gap-3">
+          <a
+            href="admin_dashboard.html"
+            class="pill-link btn-outline text-sm is-current"
+            >لوحة التحكم</a
+          >
           <a
             href="admin_items.html"
             class="pill-link btn-outline text-sm"
@@ -33,6 +39,11 @@
             href="admin_reports.html"
             class="pill-link btn-outline text-sm"
             >التقارير</a
+          >
+          <a
+            href="admin_pocket_expenses.html"
+            class="pill-link btn-outline text-sm"
+            >مصروف الجيب</a
           >
           <a
             href="admin_cashier_profits.html"
@@ -71,21 +82,45 @@
         <div class="panel rounded-3xl p-6">
           <p class="badge">اليوم</p>
           <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(todayTotal) }}</p>
+          <div v-if="pocketTodayTotal" class="mt-3">
+            <span class="deduction-pill">
+              <span>مصروف الجيب</span>
+              <span class="mono">-{{ formatMoney(pocketTodayTotal) }}</span>
+            </span>
+          </div>
           <p class="mt-2 text-sm text-faint">ربح اليوم</p>
         </div>
         <div class="panel rounded-3xl p-6">
           <p class="badge">هذا الاسبوع</p>
           <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(weekTotal) }}</p>
+          <div v-if="pocketWeekTotal" class="mt-3">
+            <span class="deduction-pill">
+              <span>مصروف الجيب</span>
+              <span class="mono">-{{ formatMoney(pocketWeekTotal) }}</span>
+            </span>
+          </div>
           <p class="mt-2 text-sm text-faint">ربح الاسبوع</p>
         </div>
         <div class="panel rounded-3xl p-6">
           <p class="badge">هذا الشهر</p>
           <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(monthTotal) }}</p>
+          <div v-if="pocketMonthTotal" class="mt-3">
+            <span class="deduction-pill">
+              <span>مصروف الجيب</span>
+              <span class="mono">-{{ formatMoney(pocketMonthTotal) }}</span>
+            </span>
+          </div>
           <p class="mt-2 text-sm text-faint">ربح الشهر</p>
         </div>
         <div class="panel rounded-3xl p-6">
           <p class="badge">هذه السنة</p>
           <p class="mono text-3xl md:text-4xl text-white">{{ formatMoney(yearTotal) }}</p>
+          <div v-if="pocketYearTotal" class="mt-3">
+            <span class="deduction-pill">
+              <span>مصروف الجيب</span>
+              <span class="mono">-{{ formatMoney(pocketYearTotal) }}</span>
+            </span>
+          </div>
           <p class="mt-2 text-sm text-faint">ربح السنة</p>
         </div>
       </section>
@@ -102,16 +137,51 @@
                 <th class="py-2">الوقت</th>
                 <th>الكاشير</th>
                 <th>الاجمالي</th>
+                <th>نسبة الكاشير</th>
+                <th>التفاصيل</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="bill in bills.slice(0, 10)" :key="bill.id" class="border-t">
-                <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
-                <td>{{ bill.profiles?.username || "-" }}</td>
-                <td class="mono">{{ formatMoney(bill.total) }}</td>
-              </tr>
-              <tr v-if="!bills.length">
-                <td colspan="3" class="py-4 text-center text-faint">
+              <template v-for="bill in billsToday" :key="bill.id">
+                <tr class="border-t">
+                  <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
+                  <td>{{ bill.profiles?.username || "-" }}</td>
+                  <td class="mono">{{ formatMoney(bill.total) }}</td>
+                  <td class="mono">{{ getBillSharePct(bill) }}%</td>
+                  <td>
+                    <button
+                      class="text-xs text-sky-300"
+                      @click="toggleLines(bill.id)"
+                    >
+                      {{ lineItems[bill.id] ? "اخفاء" : "عرض" }}
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="lineItems[bill.id]" class="border-t">
+                  <td colspan="5" class="py-3">
+                    <div v-if="loadingLines[bill.id]" class="text-sm text-faint">
+                      جاري التحميل...
+                    </div>
+                    <div v-else class="grid gap-2 md:grid-cols-2">
+                      <div
+                        v-for="line in lineItems[bill.id]"
+                        :key="line.id"
+                        class="flex items-center justify-between rounded-xl card-strong px-3 py-2"
+                      >
+                        <div>
+                          <p class="text-sm text-white">{{ line.name }}</p>
+                          <p class="mono text-xs text-faint">
+                            {{ line.line_type }} - الكمية {{ line.qty }}
+                          </p>
+                        </div>
+                        <span class="mono text-sm">{{ formatMoney(line.total) }}</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="!billsToday.length">
+                <td colspan="5" class="py-4 text-center text-faint">
                   لا توجد فواتير بعد.
                 </td>
               </tr>
@@ -121,7 +191,7 @@
       </section>
 
       <footer class="mt-10 text-center text-xs text-faint">
-        مبرمج ومصمم النظام .المهندس مهدي محمد
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
       </footer>
     </div>
 

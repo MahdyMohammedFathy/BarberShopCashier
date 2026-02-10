@@ -11,11 +11,13 @@ const app = {
       bills: [],
       billLines: [],
       itemCosts: new Map(),
+      pocketExpenses: [],
       stats: [],
       weekLabel: "",
       soldOutItems: [],
       bannerVisible: false,
       bannerTimer: null,
+      cashierSharePct: 0,
     };
   },
   computed: {
@@ -33,6 +35,13 @@ const app = {
         map[line.bill_id].push(line);
       });
       return map;
+    },
+    weeklyPocketRows() {
+      const { startOfWeek, endOfWeek } = this.getPeriodStarts();
+      return (this.pocketExpenses || []).filter((row) => {
+        const rowDate = new Date(row.created_at);
+        return rowDate >= startOfWeek && rowDate <= endOfWeek;
+      });
     },
   },
   methods: {
@@ -73,6 +82,14 @@ const app = {
         month: Number(values.month),
         day: Number(values.day),
       };
+    },
+    getCairoHour(date, timeZone) {
+      const hour = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "2-digit",
+        hour12: false,
+      }).format(date);
+      return Number(hour);
     },
     getCairoWeekdayIndex(date, timeZone) {
       const weekday = new Intl.DateTimeFormat("en-US", {
@@ -116,6 +133,7 @@ const app = {
       const timeZone = "Africa/Cairo";
       const now = new Date();
       const todayParts = this.getCairoDateParts(now, timeZone);
+      const hour = this.getCairoHour(now, timeZone);
       const dayIndex = this.getCairoWeekdayIndex(now, timeZone);
       const daysSinceMonday = (dayIndex + 6) % 7;
 
@@ -159,27 +177,56 @@ const app = {
         Date.UTC(mondayParts.year, mondayParts.month - 1, mondayParts.day)
       );
       endBase.setUTCDate(endBase.getUTCDate() + 7);
-      const endParts = {
+      const endWeekParts = {
         year: endBase.getUTCFullYear(),
         month: endBase.getUTCMonth() + 1,
         day: endBase.getUTCDate(),
       };
 
       const endOfWeek = this.makeCairoDate(
-        endParts.year,
-        endParts.month,
-        endParts.day,
+        endWeekParts.year,
+        endWeekParts.month,
+        endWeekParts.day,
         6,
         0,
         0,
         timeZone
       );
 
+      const startBase = new Date(
+        Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day)
+      );
+      if (hour < 12) {
+        startBase.setUTCDate(startBase.getUTCDate() - 1);
+      }
+      const startParts = {
+        year: startBase.getUTCFullYear(),
+        month: startBase.getUTCMonth() + 1,
+        day: startBase.getUTCDate(),
+      };
       const startOfToday = this.makeCairoDate(
-        todayParts.year,
-        todayParts.month,
-        todayParts.day,
+        startParts.year,
+        startParts.month,
+        startParts.day,
+        12,
         0,
+        0,
+        timeZone
+      );
+      const endOfTodayBase = new Date(
+        Date.UTC(startParts.year, startParts.month - 1, startParts.day)
+      );
+      endOfTodayBase.setUTCDate(endOfTodayBase.getUTCDate() + 1);
+      const endParts = {
+        year: endOfTodayBase.getUTCFullYear(),
+        month: endOfTodayBase.getUTCMonth() + 1,
+        day: endOfTodayBase.getUTCDate(),
+      };
+      const endOfToday = this.makeCairoDate(
+        endParts.year,
+        endParts.month,
+        endParts.day,
+        6,
         0,
         0,
         timeZone
@@ -194,13 +241,13 @@ const app = {
         timeZone
       );
 
-      return { startOfToday, startOfWeek, startOfMonth, endOfWeek };
+      return { startOfToday, endOfToday, startOfWeek, startOfMonth, endOfWeek };
     },
     async loadCashiers() {
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, full_name")
-        .eq("role", "cashier")
+        .select("id, username, full_name, role")
+        .in("role", ["cashier", "admin"])
         .order("username");
       this.cashiers = data || [];
       this.calculateStats();
@@ -210,10 +257,21 @@ const app = {
       since.setMonth(since.getMonth() - 12);
       const { data } = await supabase
         .from("bills")
-        .select("id, total, discount, created_at, created_by, profiles(id, username, full_name)")
+        .select("id, total, discount, share_pct, created_at, created_by, profiles(id, username, full_name, role)")
         .gte("created_at", since.toISOString())
         .order("created_at", { ascending: false });
       this.bills = data || [];
+      this.calculateStats();
+    },
+    async loadPocketExpenses() {
+      const since = new Date();
+      since.setMonth(since.getMonth() - 12);
+      const { data } = await supabase
+        .from("pocket_expenses")
+        .select("id, user_id, amount, note, created_at, profiles(id, username, full_name)")
+        .gte("created_at", since.toISOString())
+        .order("created_at", { ascending: false });
+      this.pocketExpenses = data || [];
       this.calculateStats();
     },
     async loadBillLines() {
@@ -231,6 +289,25 @@ const app = {
         (data || []).map((item) => [item.id, Number(item.cost_price) || 0])
       );
       this.calculateStats();
+    },
+    async loadSettings() {
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .eq("key", "cashier_share_pct")
+        .maybeSingle();
+      if (error) {
+        this.cashierSharePct = 0;
+        return;
+      }
+      this.cashierSharePct = Number(data?.value) || 0;
+      this.calculateStats();
+    },
+    getBillSharePct(bill, role) {
+      const stored = Number(bill?.share_pct);
+      if (Number.isFinite(stored) && stored > 0) return stored;
+      const fallback = role === "admin" ? 100 : Number(this.cashierSharePct) || 0;
+      return Math.round(fallback * 100) / 100;
     },
     async loadSoldOut() {
       const { data } = await supabase
@@ -253,7 +330,7 @@ const app = {
       }
     },
     calculateStats() {
-      const { startOfToday, startOfWeek, startOfMonth, endOfWeek } =
+      const { startOfToday, endOfToday, startOfWeek, startOfMonth, endOfWeek } =
         this.getPeriodStarts();
 
       this.weekLabel = `${this.formatDateTime(startOfWeek)} - ${this.formatDateTime(endOfWeek)}`;
@@ -274,37 +351,72 @@ const app = {
           {
             id: cashier.id,
             name: cashier.full_name || cashier.username,
+            role: cashier.role,
             todayGross: 0,
             todayNet: 0,
             weekGross: 0,
             weekNet: 0,
+            weekCost: 0,
+            weekPocket: 0,
             monthGross: 0,
             monthNet: 0,
+            monthPocket: 0,
           },
         ])
       );
+
+      const pocketWeekTotals = new Map();
+      const pocketMonthTotals = new Map();
+      (this.pocketExpenses || []).forEach((row) => {
+        const rowDate = new Date(row.created_at);
+        const amount = Number(row.amount) || 0;
+        if (!row.user_id || !amount) return;
+        if (rowDate >= startOfWeek && rowDate <= endOfWeek) {
+          pocketWeekTotals.set(
+            row.user_id,
+            (pocketWeekTotals.get(row.user_id) || 0) + amount
+          );
+        }
+        if (rowDate >= startOfMonth) {
+          pocketMonthTotals.set(
+            row.user_id,
+            (pocketMonthTotals.get(row.user_id) || 0) + amount
+          );
+        }
+      });
 
       (this.bills || []).forEach((bill) => {
         const profileId = bill.created_by || bill.profiles?.id;
         if (!profileId || !statsMap.has(profileId)) return;
         const billDate = new Date(bill.created_at);
         const gross = Number(bill.total) || 0;
-        const cost = costPerBill.get(bill.id) || 0;
-        const net = gross - cost;
         const entry = statsMap.get(profileId);
+        const role = bill.profiles?.role || entry.role;
+        const cost = costPerBill.get(bill.id) || 0;
+        const baseNet = gross - cost;
+        const sharePct = this.getBillSharePct(bill, role);
+        const net = (baseNet * sharePct) / 100;
 
-        if (billDate >= startOfToday) {
+        if (billDate >= startOfToday && billDate <= endOfToday) {
           entry.todayGross += gross;
           entry.todayNet += net;
         }
         if (billDate >= startOfWeek) {
           entry.weekGross += gross;
           entry.weekNet += net;
+          entry.weekCost += cost;
         }
         if (billDate >= startOfMonth) {
           entry.monthGross += gross;
           entry.monthNet += net;
         }
+      });
+
+      statsMap.forEach((entry, profileId) => {
+        entry.weekPocket = pocketWeekTotals.get(profileId) || 0;
+        entry.monthPocket = pocketMonthTotals.get(profileId) || 0;
+        entry.weekNet -= entry.weekPocket;
+        entry.monthNet -= entry.monthPocket;
       });
 
       this.stats = Array.from(statsMap.values());
@@ -322,12 +434,23 @@ const app = {
           (row) => `
             <tr>
               <td>${row.name}</td>
-              <td>${this.formatMoney(row.todayGross)}</td>
-              <td>${this.formatMoney(row.todayNet)}</td>
               <td>${this.formatMoney(row.weekGross)}</td>
-              <td>${this.formatMoney(row.weekNet)}</td>
-              <td>${this.formatMoney(row.monthGross)}</td>
-              <td>${this.formatMoney(row.monthNet)}</td>
+              <td>${this.formatMoney(row.weekCost)}</td>
+              <td>${this.formatMoney(row.weekPocket)}</td>
+              <td class="net-highlight">${this.formatMoney(row.weekNet)}</td>
+            </tr>
+          `
+        )
+        .join("");
+
+      const pocketRows = this.weeklyPocketRows
+        .map(
+          (row) => `
+            <tr>
+              <td>${this.formatDateTime(row.created_at)}</td>
+              <td>${row.profiles?.full_name || row.profiles?.username || "-"}</td>
+              <td>${this.formatMoney(row.amount)}</td>
+              <td>${row.note || "-"}</td>
             </tr>
           `
         )
@@ -357,10 +480,22 @@ const app = {
               const billId = bill.id?.slice(0, 8) || "-";
               const discount = Number(bill.discount) || 0;
               const discountLabel = discount > 0 ? ` | الخصم: ${this.formatMoney(discount)}` : "";
+              const linesForBill = this.billLinesByBillId[bill.id] || [];
+              const billCost = linesForBill.reduce((sum, line) => {
+                if (line.line_type !== "item") return sum;
+                const qty = Number(line.qty) || 0;
+                const lineCost = Number(line.cost_price) || 0;
+                const fallbackCost = this.itemCosts.get(line.ref_id) || 0;
+                return sum + (lineCost || fallbackCost) * qty;
+              }, 0);
+              const baseNet = (Number(bill.total) || 0) - billCost;
+              const sharePct = this.getBillSharePct(bill, bill.profiles?.role);
+              const billNet = (baseNet * sharePct) / 100;
+              const netLabel = ` | الصافي: ${this.formatMoney(billNet)} (${this.formatMoney(baseNet)} x ${sharePct}%) | نسبة الكاشير: ${sharePct}%`;
               const billHeader = `
                 <tr class="bill-head">
                   <td colspan="9">
-                    فاتورة #${billId} | الوقت: ${this.formatDateTime(bill.created_at)} | الاجمالي: ${this.formatMoney(bill.total)}${discountLabel}
+                    فاتورة #${billId} | الوقت: ${this.formatDateTime(bill.created_at)} | الاجمالي: ${this.formatMoney(bill.total)}${netLabel}${discountLabel}
                   </td>
                 </tr>
               `;
@@ -405,6 +540,7 @@ const app = {
       thead th { background: #e9f5ff; color: #0f172a; text-align: right; padding: 8px; border-bottom: 2px solid #0ea5e9; }
       tbody td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
       tbody tr:nth-child(even) { background: #f8fafc; }
+      .net-highlight { background: #fef9c3; font-weight: 700; }
       .cashier-head td { background: #e0f2fe; color: #0f172a; font-weight: 700; border-bottom: 1px solid #bae6fd; }
       .bill-head td { background: #eef2ff; color: #1e293b; font-weight: 700; border-bottom: 1px solid #cbd5f5; }
       .footer { margin-top: 18px; font-size: 11px; color: #475569; }
@@ -426,21 +562,37 @@ const app = {
 
     <div class="card">
       <h2>الاجمالي والصافي</h2>
-      <div class="meta">الصافي بعد خصم تكلفة الاصناف</div>
+      <div class="meta">الصافي بعد خصم تكلفة الاصناف ومصروف الجيب</div>
       <table>
         <thead>
           <tr>
             <th>الكاشير</th>
-            <th>اجمالي اليوم</th>
-            <th>صافي اليوم</th>
             <th>اجمالي الاسبوع</th>
+            <th>تكلفة المنتجات</th>
+            <th>مصروف الاسبوع</th>
             <th>صافي الاسبوع</th>
-            <th>اجمالي الشهر</th>
-            <th>صافي الشهر</th>
           </tr>
         </thead>
         <tbody>
-          ${reportRows || `<tr><td colspan="7">لا يوجد كاشير مسجل.</td></tr>`}
+          ${reportRows || `<tr><td colspan="5">لا يوجد كاشير مسجل.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>مصروف الجيب الاسبوعي</h2>
+      <div class="meta">${this.weekLabel}</div>
+      <table>
+        <thead>
+          <tr>
+            <th>الوقت</th>
+            <th>الموظف</th>
+            <th>المبلغ</th>
+            <th>ملاحظة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pocketRows || `<tr><td colspan="4">لا توجد مصروفات هذا الاسبوع.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -463,7 +615,7 @@ const app = {
           </tr>
         </thead>
         <tbody>
-          ${billsRows || `<tr><td colspan="8">لا توجد فواتير لهذا الاسبوع.</td></tr>`}
+          ${billsRows || `<tr><td colspan="9">لا توجد فواتير لهذا الاسبوع.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -493,7 +645,15 @@ const app = {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "bill_lines" },
-          () => this.loadBillLines()
+          () => {
+            this.loadBillLines();
+            this.loadBills();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "pocket_expenses" },
+          () => this.loadPocketExpenses()
         )
         .on(
           "postgres_changes",
@@ -508,6 +668,11 @@ const app = {
             this.loadItemCosts();
           }
         )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "app_settings" },
+          () => this.loadSettings()
+        )
         .subscribe();
     },
   },
@@ -518,7 +683,9 @@ const app = {
     await this.loadBills();
     await this.loadBillLines();
     await this.loadItemCosts();
+    await this.loadPocketExpenses();
     await this.loadSoldOut();
+    await this.loadSettings();
     this.subscribeRealtime();
   },
 };

@@ -20,16 +20,26 @@
           <p class="badge">ادوات المدير</p>
            <h1 class="text-4xl md:text-5xl tracking-wide text-white">الاصناف والخدمات</h1>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="admin-nav flex flex-wrap gap-3">
           <a
             href="admin_dashboard.html"
              class="pill-link btn-outline text-sm"
             >لوحة التحكم</a
           >
           <a
+            href="admin_items.html"
+             class="pill-link btn-outline text-sm is-current"
+            >الاصناف</a
+          >
+          <a
             href="admin_reports.html"
              class="pill-link btn-outline text-sm"
             >التقارير</a
+          >
+          <a
+            href="admin_pocket_expenses.html"
+            class="pill-link btn-outline text-sm"
+            >مصروف الجيب</a
           >
           <a
             href="admin_cashier_profits.html"
@@ -68,7 +78,7 @@
         <div class="panel rounded-3xl p-6">
            <h2 class="text-2xl md:text-3xl tracking-wide text-white">الاصناف</h2>
           <div class="mt-4 space-y-3">
-              <div class="grid gap-3 md:grid-cols-5">
+              <div class="grid gap-3 md:grid-cols-4">
               <input
                 v-model="newItem.name"
                  class="input-field rounded-xl px-3 py-2 text-sm"
@@ -80,13 +90,6 @@
                 min="0"
                  class="input-field rounded-xl px-3 py-2 text-sm"
                 placeholder="السعر"
-              />
-              <input
-                v-model="newItem.cost_price"
-                type="number"
-                min="0"
-                class="input-field rounded-xl px-3 py-2 text-sm"
-                placeholder="تكلفة الصنف"
               />
               <input
                 v-model="newItem.stock_qty"
@@ -112,9 +115,6 @@
                    <p class="text-sm text-white">{{ item.name }}</p>
                    <p class="mono text-xs text-faint">
                     {{ formatMoney(item.price) }}
-                  </p>
-                  <p class="mono text-xs text-faint">
-                    تكلفة: {{ formatMoney(item.cost_price) }}
                   </p>
                   <p class="text-xs text-soft">المخزون: {{ item.stock_qty }}</p>
                 </div>
@@ -198,19 +198,13 @@
             <h3 class="text-2xl tracking-wide text-white">تعديل صنف</h3>
             <button class="text-sm text-faint" @click="editingItem = null">اغلاق</button>
           </div>
-          <div class="mt-4 grid gap-3 md:grid-cols-5">
+          <div class="mt-4 grid gap-3 md:grid-cols-4">
             <input
               v-model="editingItem.name"
               class="input-field rounded-xl px-3 py-2 text-sm"
             />
             <input
               v-model.number="editingItem.price"
-              type="number"
-              min="0"
-              class="input-field rounded-xl px-3 py-2 text-sm"
-            />
-            <input
-              v-model.number="editingItem.cost_price"
               type="number"
               min="0"
               class="input-field rounded-xl px-3 py-2 text-sm"
@@ -269,7 +263,7 @@
       </div>
 
       <footer class="mt-10 text-center text-xs text-faint">
-        مبرمج ومصمم النظام .المهندس مهدي محمد
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
       </footer>
     </div>
 

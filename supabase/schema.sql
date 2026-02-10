@@ -5,6 +5,7 @@ create table if not exists public.profiles (
   username text unique not null,
   full_name text,
   role text not null check (role in ('admin', 'cashier')),
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -35,10 +36,12 @@ create table if not exists public.bills (
   created_at timestamptz not null default now(),
   created_by uuid not null references public.profiles(id),
   total numeric(10, 2) not null default 0,
-  discount numeric(10, 2) not null default 0
+  discount numeric(10, 2) not null default 0,
+  share_pct numeric(5, 2) not null default 0
 );
 
 alter table public.bills add column if not exists discount numeric(10, 2) not null default 0;
+alter table public.bills add column if not exists share_pct numeric(5, 2) not null default 0;
 
 create table if not exists public.bill_lines (
   id uuid primary key default gen_random_uuid(),
@@ -52,7 +55,24 @@ create table if not exists public.bill_lines (
   total numeric(10, 2) not null default 0
 );
 
+create table if not exists public.pocket_expenses (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  amount numeric(10, 2) not null default 0,
+  reason text,
+  note text
+);
+
+create table if not exists public.app_settings (
+  key text primary key,
+  value numeric(10, 2) not null default 0,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.bill_lines add column if not exists cost_price numeric(10, 2) not null default 0;
+alter table public.pocket_expenses enable row level security;
+alter table public.app_settings enable row level security;
 
 create or replace function public.has_any_role(roles text[])
 returns boolean
@@ -155,3 +175,28 @@ create policy "bill_lines read"
 create policy "bill_lines insert"
   on public.bill_lines for insert
   with check (public.has_any_role(array['admin', 'cashier']));
+
+create policy "pocket_expenses read"
+  on public.pocket_expenses for select
+  using (auth.role() = 'authenticated');
+
+create policy "pocket_expenses insert admin"
+  on public.pocket_expenses for insert
+  with check (public.has_any_role(array['admin']));
+
+create policy "pocket_expenses delete admin"
+  on public.pocket_expenses for delete
+  using (public.has_any_role(array['admin']));
+
+create policy "app_settings read"
+  on public.app_settings for select
+  using (auth.role() = 'authenticated');
+
+create policy "app_settings write admin"
+  on public.app_settings for insert
+  with check (public.has_any_role(array['admin']));
+
+create policy "app_settings update admin"
+  on public.app_settings for update
+  using (public.has_any_role(array['admin']))
+  with check (public.has_any_role(array['admin']));

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مصروف الجيب - كاشير الحلاقة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="assets/css/app.css" />
+  </head>
+  <body class="app-bg min-h-screen text-right">
+    <div id="app" class="app-shell px-5 md:px-10 py-8">
+      <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p class="badge">ادوات المدير</p>
+          <h1 class="text-4xl md:text-5xl tracking-wide text-white">مصروف الجيب</h1>
+          <p class="text-soft text-sm">اضافة ومتابعة مصروفات الموظفين.</p>
+        </div>
+        <div class="admin-nav flex flex-wrap gap-3">
+          <a href="admin_dashboard.html" class="pill-link btn-outline text-sm">لوحة التحكم</a>
+          <a href="admin_items.html" class="pill-link btn-outline text-sm">الاصناف</a>
+          <a href="admin_reports.html" class="pill-link btn-outline text-sm">التقارير</a>
+          <a href="admin_pocket_expenses.html" class="pill-link btn-outline text-sm is-current">مصروف الجيب</a>
+          <a href="admin_cashier_profits.html" class="pill-link btn-outline text-sm">ارباح الكاشير</a>
+          <a href="cashier_pos.html" class="pill-link btn-primary text-sm">فاتورة جديدة</a>
+          <button class="pill-link btn-outline text-sm" @click="handleSignOut">
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section v-if="soldOutItems.length && bannerVisible" class="mt-6 panel rounded-3xl p-4 alert-banner">
+        <p class="alert-title">تنبيه: منتجات نافدة</p>
+        <p class="text-sm text-faint">المنتجات التالية نفدت من المخزون:</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <span v-for="item in soldOutItems" :key="item.id" class="pill-link btn-outline text-xs">
+            {{ item.name }}
+          </span>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">اضافة مصروف</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">مصروف جديد</h2>
+          </div>
+        </div>
+        <form class="mt-4 grid gap-4 md:grid-cols-4" @submit.prevent="addPocketExpense">
+          <div>
+            <label class="text-sm text-soft" for="pocket-user">الموظف</label>
+            <select
+              id="pocket-user"
+              v-model="pocketForm.userId"
+              class="mt-2 w-full rounded-2xl px-4 py-2 input-field"
+              required
+            >
+              <option value="">اختر الموظف</option>
+              <option v-for="cashier in cashiers" :key="cashier.id" :value="cashier.id">
+                {{ cashier.full_name || cashier.username }} - صافي الاسبوع: {{ formatMoney(weekProfitFor(cashier.id)) }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="text-sm text-soft" for="pocket-amount">المبلغ</label>
+            <input
+              id="pocket-amount"
+              v-model.number="pocketForm.amount"
+              type="number"
+              min="1"
+              step="0.01"
+              class="mt-2 w-full rounded-2xl px-4 py-2 input-field"
+              placeholder="0"
+              required
+            />
+          </div>
+          <div>
+            <label class="text-sm text-soft" for="pocket-reason">السبب</label>
+            <select
+              id="pocket-reason"
+              v-model="pocketForm.reason"
+              class="mt-2 w-full rounded-2xl px-4 py-2 input-field"
+              :disabled="exceedsWeekProfit && isAdminTarget"
+              required
+            >
+              <option value="مصروف عادي">مصروف عادي</option>
+              <option value="قبض الاسبوع">قبض الاسبوع</option>
+            </select>
+            <p v-if="exceedsWeekProfit && isAdminTarget" class="mt-2 text-xs text-faint">
+              المبلغ اكبر من صافي الاسبوع، سيتم حفظ السبب كـ "بضاعة محل او امور اخرى" (ادمن فقط).
+            </p>
+            <p v-if="exceedsWeekProfit && !isAdminTarget" class="mt-2 text-xs text-faint">
+              لا يمكن ان يتجاوز المصروف صافي ربح الاسبوع لهذا الكاشير.
+            </p>
+          </div>
+          <!-- <div>
+            <label class="text-sm text-soft" for="pocket-note">ملاحظة (اختياري)</label>
+            <input
+              id="pocket-note"
+              v-model.trim="pocketForm.note"
+              type="text"
+              class="mt-2 w-full rounded-2xl px-4 py-2 input-field"
+              placeholder="سبب المصروف"
+            />
+          </div> -->
+          <div class="md:col-span-4 flex flex-wrap items-center gap-3">
+            <button type="submit" class="pill-link btn-primary text-sm" :disabled="pocketSaving">
+              {{ pocketSaving ? "جاري الحفظ..." : "اضافة المصروف" }}
+            </button>
+            <div v-if="pocketForm.userId" class="deduction-pill">
+              <span>صافي الاسبوع</span>
+              <span class="mono">{{ formatMoney(selectedWeekProfit) }}</span>
+            </div>
+            <p v-if="pocketError" class="text-sm text-[#fda4af]">{{ pocketError }}</p>
+          </div>
+          <div v-if="showZeroProfitWarning" class="md:col-span-4 alert-banner rounded-2xl px-4 py-3">
+            <p class="alert-title">تنبيه</p>
+            <p class="text-sm text-faint">ربح المستخدم هذا الاسبوع يساوي 0، سيتم اضافة المصروف اذا تابعت.</p>
+          </div>
+        </form>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">سجل المصروفات</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">مصروف الجيب</h2>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 font-sans text-sm">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('today')">
+                اليوم
+              </button> -->
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('week')">
+                هذا الاسبوع
+              </button>
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('month')">
+                هذا الشهر
+              </button>
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('year')">
+                هذه السنة
+              </button>
+            </div>
+            <label class="flex items-center gap-2">
+              من
+              <input
+                type="date"
+                v-model="dateFrom"
+                class="input-field date-field rounded-xl px-3 py-2"
+                lang="ar"
+                dir="rtl"
+              />
+            </label>
+            <label class="flex items-center gap-2">
+              الى
+              <input
+                type="date"
+                v-model="dateTo"
+                class="input-field date-field rounded-xl px-3 py-2"
+                lang="ar"
+                dir="rtl"
+              />
+            </label>
+            <button class="rounded-xl btn-outline px-4 py-2" @click="loadPocketExpenses">
+              تطبيق
+            </button>
+            <button class="rounded-xl btn-outline px-4 py-2" @click="resetRange">
+              اعادة
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full min-w-[720px] text-right text-sm table-dark">
+            <thead>
+              <tr>
+                <th class="py-2">الوقت</th>
+                <th>الموظف</th>
+                <th>المبلغ</th>
+                <th>السبب</th>
+                <th>ملاحظة</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in pocketExpenses" :key="row.id" class="border-t">
+                <td class="py-2">{{ formatDateTime(row.created_at) }}</td>
+                <td>{{ row.profiles?.full_name || row.profiles?.username || "-" }}</td>
+                <td class="mono">{{ formatMoney(row.amount) }}</td>
+                <td>
+                  {{ row.reason === "بضاعة محل او امور اخرى"
+                    ? "بضاعة محل او امور اخرى (ادمن فقط)"
+                    : (row.reason || "-") }}
+                </td>
+                <td>{{ row.note || "-" }}</td>
+              </tr>
+              <tr v-if="!pocketExpenses.length">
+                <td colspan="5" class="py-4 text-center text-faint">
+                  لا توجد مصروفات.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 flex items-center justify-between">
+          <p class="badge">الاجمالي</p>
+          <p class="mono text-2xl md:text-3xl text-white">{{ formatMoney(total) }}</p>
+        </div>
+      </section>
+
+      <footer class="mt-10 text-center text-xs text-faint">
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
+      </footer>
+    </div>
+
+    <script type="module" src="assets/js/adminPocketExpenses.js"></script>
+  </body>
+</html>

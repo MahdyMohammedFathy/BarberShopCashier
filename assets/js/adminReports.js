@@ -17,11 +17,60 @@ const app = {
       soldOutItems: [],
       bannerVisible: false,
       bannerTimer: null,
+      cashierSharePct: 0,
+      settingsSaving: false,
+      settingsError: "",
     };
   },
   methods: {
     formatMoney,
     formatDateTime,
+    getBillSharePct(bill) {
+      const stored = Number(bill?.share_pct);
+      if (Number.isFinite(stored) && stored > 0) return stored;
+      const role = bill?.profiles?.role;
+      const fallback = role === "admin" ? 100 : Number(this.cashierSharePct) || 0;
+      return Math.round(fallback * 100) / 100;
+    },
+    formatDateInput(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    },
+    async setRange(range) {
+      const now = new Date();
+      let start;
+      let end;
+
+      if (range === "today") {
+        start = new Date(now);
+        end = new Date(now);
+      }
+
+      if (range === "week") {
+        start = new Date(now);
+        const dayIndex = (start.getDay() + 6) % 7;
+        start.setDate(start.getDate() - dayIndex);
+        end = new Date(start);
+        end.setDate(end.getDate() + 6);
+      }
+
+      if (range === "month") {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      }
+
+      if (range === "year") {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear(), 11, 31);
+      }
+
+      if (!start || !end) return;
+      this.dateFrom = this.formatDateInput(start);
+      this.dateTo = this.formatDateInput(end);
+      await this.loadBills();
+    },
     async loadSoldOut() {
       const { data } = await supabase
         .from("items")
@@ -45,14 +94,56 @@ const app = {
     async loadUsers() {
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, role, full_name, created_at")
+        .select("id, username, role, full_name, created_at, active")
         .order("created_at", { ascending: false });
       this.users = data || [];
+    },
+    async loadSettings() {
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .eq("key", "cashier_share_pct")
+        .maybeSingle();
+      if (error) {
+        this.cashierSharePct = 0;
+        return;
+      }
+      this.cashierSharePct = Number(data?.value) || 0;
+    },
+    async saveSettings() {
+      const raw = Number(this.cashierSharePct);
+      const nextValue = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
+      this.cashierSharePct = nextValue;
+      this.settingsSaving = true;
+      this.settingsError = "";
+      const payload = {
+        key: "cashier_share_pct",
+        value: nextValue,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from("app_settings")
+        .upsert(payload, { onConflict: "key" });
+      this.settingsSaving = false;
+      if (error) {
+        this.settingsError = "تعذر حفظ نسبة الكاشير.";
+      }
+    },
+    async toggleUserActive(user) {
+      if (user.role !== "cashier") return;
+      const nextActive = !user.active;
+      const { error } = await supabase
+        .from("profiles")
+        .update({ active: nextActive })
+        .eq("id", user.id);
+      if (!error) {
+        this.loadUsers();
+      }
     },
     async loadBills() {
       let query = supabase
         .from("bills")
-        .select("id, total, created_at, profiles(username)")
+        .select("id, total, share_pct, created_at, profiles(username, role)")
         .order("created_at", { ascending: false });
 
       if (this.dateFrom) {
@@ -109,6 +200,11 @@ const app = {
           { event: "*", schema: "public", table: "items" },
           () => this.loadSoldOut()
         )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "app_settings" },
+          () => this.loadSettings()
+        )
         .subscribe();
     },
   },
@@ -118,6 +214,7 @@ const app = {
     await this.loadBills();
     await this.loadUsers();
     await this.loadSoldOut();
+    await this.loadSettings();
     this.subscribeRealtime();
   },
 };

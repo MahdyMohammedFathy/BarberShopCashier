@@ -56,12 +56,12 @@
       </section>
 
       <footer class="mt-10 text-center text-xs text-faint">
-        مبرمج ومصمم النظام .المهندس مهدي محمد
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
       </footer>
     </main>
 
     <script type="module">
-      import { signInWithUsername } from "./assets/js/auth.js";
+      import { signInWithUsername, isWithinOperatingHours, cashierHoursMessage, cashierInactiveMessage } from "./assets/js/auth.js";
       import { supabase } from "./assets/js/supabaseClient.js";
 
       const form = document.getElementById("loginForm");
@@ -73,9 +73,19 @@
         const { user } = data.session;
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, active")
           .eq("id", user.id)
           .maybeSingle();
+        if (profile?.role === "cashier" && profile?.active === false) {
+          await supabase.auth.signOut();
+          errorEl.textContent = cashierInactiveMessage;
+          return;
+        }
+        if (profile?.role === "cashier" && !isWithinOperatingHours()) {
+          await supabase.auth.signOut();
+          errorEl.textContent = cashierHoursMessage;
+          return;
+        }
         if (profile?.role === "admin") {
           window.location.href = "admin_dashboard.html";
           return;

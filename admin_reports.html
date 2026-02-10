@@ -20,7 +20,7 @@
           <p class="badge">تقارير المدير</p>
           <h1 class="text-4xl md:text-5xl tracking-wide text-white">الفواتير والمستخدمون</h1>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="admin-nav flex flex-wrap gap-3">
           <a
             href="admin_dashboard.html"
             class="pill-link btn-outline text-sm"
@@ -32,9 +32,19 @@
             >الاصناف</a
           >
           <a
+            href="admin_reports.html"
+            class="pill-link btn-outline text-sm is-current"
+            >التقارير</a
+          >
+          <a
             href="admin_cashier_profits.html"
             class="pill-link btn-outline text-sm"
             >ارباح الكاشير</a
+          >
+          <a
+            href="admin_pocket_expenses.html"
+            class="pill-link btn-outline text-sm"
+            >مصروف الجيب</a
           >
           <a
             href="cashier_pos.html"
@@ -71,12 +81,28 @@
             <h2 class="text-2xl md:text-3xl tracking-wide text-white">التقارير</h2>
           </div>
           <div class="flex flex-wrap items-center gap-3 font-sans text-sm">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('today')">
+                اليوم
+              </button> -->
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('week')">
+                هذا الاسبوع
+              </button>
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('month')">
+                هذا الشهر
+              </button>
+              <button class="rounded-xl btn-outline px-3 py-2 text-xs" @click="setRange('year')">
+                هذه السنة
+              </button>
+            </div>
             <label class="flex items-center gap-2">
               من
               <input
                 type="date"
                 v-model="dateFrom"
-                class="input-field rounded-xl px-3 py-2"
+                class="input-field date-field rounded-xl px-3 py-2"
+                lang="ar"
+                dir="rtl"
               />
             </label>
             <label class="flex items-center gap-2">
@@ -84,7 +110,9 @@
               <input
                 type="date"
                 v-model="dateTo"
-                class="input-field rounded-xl px-3 py-2"
+                class="input-field date-field rounded-xl px-3 py-2"
+                lang="ar"
+                dir="rtl"
               />
             </label>
             <button
@@ -109,6 +137,7 @@
                 <th class="py-2">الوقت</th>
                 <th>الكاشير</th>
                 <th>الاجمالي</th>
+                <th>نسبة الكاشير</th>
                 <th>التفاصيل</th>
               </tr>
             </thead>
@@ -118,6 +147,7 @@
                   <td class="py-2">{{ formatDateTime(bill.created_at) }}</td>
                   <td>{{ bill.profiles?.username || "-" }}</td>
                   <td class="mono">{{ formatMoney(bill.total) }}</td>
+                  <td class="mono">{{ getBillSharePct(bill) }}%</td>
                   <td>
                     <button
                       class="text-xs text-sky-300"
@@ -128,7 +158,7 @@
                   </td>
                 </tr>
                 <tr v-if="lineItems[bill.id]" class="border-t">
-                  <td colspan="4" class="py-3">
+                  <td colspan="5" class="py-3">
                     <div v-if="loadingLines[bill.id]" class="text-sm text-faint">
                       جاري التحميل...
                     </div>
@@ -151,7 +181,7 @@
                 </tr>
               </template>
               <tr v-if="!bills.length">
-                <td colspan="4" class="py-4 text-center text-faint">
+                <td colspan="5" class="py-4 text-center text-faint">
                   لا توجد فواتير.
                 </td>
               </tr>
@@ -161,6 +191,37 @@
         <div class="mt-4 flex items-center justify-between">
           <p class="badge">الاجمالي</p>
           <p class="mono text-2xl md:text-3xl text-white">{{ formatMoney(total) }}</p>
+        </div>
+      </section>
+
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">الاعدادات</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">نسبة ربح الكاشير النهائية</h2>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-4">
+          <label class="text-sm text-soft">
+            النسبة %
+            <input
+              v-model.number="cashierSharePct"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              class="mt-2 w-40 rounded-2xl px-4 py-2 input-field"
+              placeholder="0"
+            />
+          </label>
+          <button
+            class="pill-link btn-primary text-sm"
+            :disabled="settingsSaving"
+            @click="saveSettings"
+          >
+            {{ settingsSaving ? "جاري الحفظ..." : "حفظ النسبة" }}
+          </button>
+          <p v-if="settingsError" class="text-sm text-[#fda4af]">{{ settingsError }}</p>
         </div>
       </section>
 
@@ -175,19 +236,36 @@
               <tr>
                 <th class="py-2">اسم المستخدم</th>
                 <th>الصلاحية</th>
+                <th>الحالة</th>
                 <th>الاسم الكامل</th>
                 <th>تاريخ الانشاء</th>
+                <th>التحكم</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="user in users" :key="user.id" class="border-t">
                 <td class="py-2">{{ user.username }}</td>
                 <td>{{ user.role }}</td>
+                <td>
+                  <span :class="user.active ? 'text-emerald-300' : 'text-rose-300'">
+                    {{ user.active ? "مفعل" : "موقوف" }}
+                  </span>
+                </td>
                 <td>{{ user.full_name || "-" }}</td>
                 <td>{{ formatDateTime(user.created_at) }}</td>
+                <td>
+                  <button
+                    v-if="user.role === 'cashier'"
+                    class="text-xs text-sky-300"
+                    @click="toggleUserActive(user)"
+                  >
+                    {{ user.active ? "ايقاف" : "تفعيل" }}
+                  </button>
+                  <span v-else class="text-xs text-faint">-</span>
+                </td>
               </tr>
               <tr v-if="!users.length">
-                <td colspan="4" class="py-4 text-center text-faint">
+                <td colspan="6" class="py-4 text-center text-faint">
                   لا توجد بيانات مستخدمين.
                 </td>
               </tr>
@@ -197,7 +275,7 @@
       </section>
 
       <footer class="mt-10 text-center text-xs text-faint">
-        مبرمج ومصمم النظام .المهندس مهدي محمد
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
       </footer>
     </div>
 

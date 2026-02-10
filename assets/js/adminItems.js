@@ -6,7 +6,6 @@ import { formatMoney } from "./utils.js";
 const emptyItem = () => ({
   name: "",
   price: "",
-  cost_price: "",
   stock_qty: "",
   active: true,
 });
@@ -63,10 +62,11 @@ const app = {
     },
     async addItem() {
       if (!this.newItem.name.trim()) return;
+      const price = Number(this.newItem.price) || 0;
       await supabase.from("items").insert({
         name: this.newItem.name.trim(),
-        price: Number(this.newItem.price) || 0,
-        cost_price: Number(this.newItem.cost_price) || 0,
+        price,
+        cost_price: price,
         stock_qty: Number(this.newItem.stock_qty) || 0,
         active: true,
       });
@@ -93,12 +93,13 @@ const app = {
     },
     async saveItem() {
       if (!this.editingItem) return;
+      const price = Number(this.editingItem.price) || 0;
       await supabase
         .from("items")
         .update({
           name: this.editingItem.name,
-          price: this.editingItem.price,
-          cost_price: this.editingItem.cost_price,
+          price,
+          cost_price: price,
           stock_qty: this.editingItem.stock_qty,
           active: this.editingItem.active,
         })

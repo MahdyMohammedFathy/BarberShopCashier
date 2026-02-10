@@ -185,8 +185,33 @@
         </div>
       </section>
 
+      <section class="mt-8 panel rounded-3xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p class="badge">هذا الاسبوع</p>
+            <h2 class="text-2xl md:text-3xl tracking-wide text-white">ملخص الاسبوع</h2>
+            <p class="text-sm text-faint">{{ weekLabel }}</p>
+          </div>
+          <div class="text-left">
+            <p class="mono text-xs text-faint">صافي ربح الاسبوع</p>
+            <p class="text-2xl md:text-3xl mono text-white">{{ formatMoney(weekNet) }}</p>
+            <p v-if="weekShareLabel" class="mono text-xs text-faint">{{ weekShareLabel }}</p>
+          </div>
+        </div>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="rounded-2xl card-strong px-4 py-3">
+            <p class="text-sm text-faint">اجمالي الاسبوع</p>
+            <p class="mono text-xl text-white">{{ formatMoney(weekGross) }}</p>
+          </div>
+          <div class="rounded-2xl card-strong px-4 py-3">
+            <p class="text-sm text-faint">مصروف الاسبوع</p>
+            <p class="mono text-xl text-white">{{ formatMoney(weekPocket) }}</p>
+          </div>
+        </div>
+      </section>
+
       <footer class="mt-10 text-center text-xs text-faint">
-        مبرمج ومصمم النظام .المهندس مهدي محمد
+        مبرمج ومصمم النظام .المهندس مهدي محمد@
       </footer>
     </div>
 
